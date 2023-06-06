@@ -1,18 +1,40 @@
 package routes
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"golang.org/x/exp/slog"
 )
 
+type logCtx string
+
+const logCtxKey = logCtx("log")
+
+type reqLog struct {
+	attrs []slog.Attr
+}
+
+func withLogAttrs(ctx context.Context) (context.Context, *reqLog) {
+	l := &reqLog{}
+	return context.WithValue(ctx, logCtxKey, l), l
+}
+
+func addLogAttrs(ctx context.Context, attrs ...slog.Attr) {
+	v := ctx.Value(logCtxKey).(*reqLog)
+
+	v.attrs = append(v.attrs, attrs...)
+}
+
 func requestLog(h http.Handler, logger *slog.Logger, route string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, rl := withLogAttrs(r.Context())
+
 		cw := &CaptureWriter{w: w}
 
 		start := time.Now()
-		h.ServeHTTP(cw, r)
+		h.ServeHTTP(cw, r.WithContext(ctx))
 		dur := time.Since(start)
 
 		sc := cw.StatusCode()
@@ -20,6 +42,15 @@ func requestLog(h http.Handler, logger *slog.Logger, route string) http.Handler 
 		log := logger.With(slog.String("http.path", r.URL.Path), slog.String("http.route", route), slog.Int("http.status", sc), slog.Duration("http.request_duration", dur))
 
 		lvl := codeToLevel(sc)
+
+		if n := len(rl.attrs); n > 0 {
+			attr := make([]any, n)
+			for i, v := range rl.attrs {
+				attr[i] = v
+			}
+
+			log = log.With(attr...)
+		}
 
 		if sc >= http.StatusBadRequest {
 			log.Log(r.Context(), lvl, "HTTP Request Error")

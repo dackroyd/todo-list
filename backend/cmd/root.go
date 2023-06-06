@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -9,7 +10,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/dackroyd/todo-list/backend/todo/database"
 	"github.com/dackroyd/todo-list/backend/todo/routes"
+	"github.com/lib/pq"
 	"github.com/spf13/cobra"
 	"golang.org/x/exp/slog"
 	"golang.org/x/sync/errgroup"
@@ -27,6 +30,7 @@ func Root(logger *slog.Logger) *cobra.Command {
 		},
 	}
 
+	root.PersistentFlags().StringVar(&cfg.DBConn, "dburl", "postgres://todo:password@127.0.0.1/todo", "DB connection string")
 	root.PersistentFlags().StringVarP(&cfg.Host, "host", "H", "127.0.0.1", "Host interface address for the server")
 	root.PersistentFlags().IntVarP(&cfg.Port, "port", "P", 8080, "HTTP port which the server listens on")
 
@@ -34,8 +38,9 @@ func Root(logger *slog.Logger) *cobra.Command {
 }
 
 type Config struct {
-	Host string
-	Port int
+	DBConn string
+	Host   string
+	Port   int
 }
 
 func Run(ctx context.Context, cfg *Config, logger *slog.Logger, stdout, stderr io.Writer) error {
@@ -46,16 +51,33 @@ func Run(ctx context.Context, cfg *Config, logger *slog.Logger, stdout, stderr i
 		return err
 	}
 
-	s := newServer(logger)
+	db, err := openDB(cfg.DBConn)
+	if err != nil {
+		return fmt.Errorf("unable open DB: %w", err)
+	}
+
+	listRepo := database.NewListRepository(db)
+	listsAPI := routes.NewListAPI(listRepo)
+
+	s := newServer(logger, listsAPI)
 
 	io.WriteString(stdout, fmt.Sprintf("Ready to accept requests on http://%s\n", addr))
 
 	return runServer(ctx, s, lis)
 }
 
-func newServer(logger *slog.Logger) *http.Server {
+func openDB(connURL string) (*sql.DB, error) {
+	conn, err := pq.NewConnector(connURL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse DB connection string: %w", err)
+	}
+
+	return sql.OpenDB(conn), nil
+}
+
+func newServer(logger *slog.Logger, lists *routes.ListsAPI) *http.Server {
 	s := &http.Server{
-		Handler: routes.Handler(logger),
+		Handler: routes.Handler(lists, logger),
 	}
 
 	return s
