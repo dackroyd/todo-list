@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/dackroyd/todo-list/backend/todo"
@@ -36,6 +37,30 @@ func (r *ListRepository) Items(ctx context.Context, listID string) ([]todo.Item,
 	}
 
 	return items, nil
+}
+
+func (r *ListRepository) List(ctx context.Context, listID string) (*todo.List, error) {
+	query := `
+		SELECT id,
+		       description
+		  FROM lists
+		  WHERE id = $1
+	`
+
+	cols := func(l *todo.List) []any {
+		return []any{&l.ID, &l.Description}
+	}
+
+	list, err := queryRow(ctx, r.db, cols, query, listID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, todo.NotFoundError(fmt.Sprintf("list with id %q does not exist", listID))
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query todo list: %w", err)
+	}
+
+	return list, nil
 }
 
 func (r *ListRepository) Lists(ctx context.Context) ([]todo.List, error) {

@@ -3,6 +3,7 @@ package routes
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -29,6 +30,11 @@ type ItemsBody struct {
 	Items []todo.Item `json:"items"`
 }
 
+// ListBody included when retrieving a TODO list.
+type ListBody struct {
+	List *todo.List `json:"list"`
+}
+
 // ListsBody included when retrieving TODO lists.
 type ListsBody struct {
 	Lists []todo.List `json:"lists"`
@@ -37,6 +43,7 @@ type ListsBody struct {
 // ListRepository where TODO lists and items are stored.
 type ListRepository interface {
 	Items(ctx context.Context, listID string) ([]todo.Item, error)
+	List(ctx context.Context, listID string) (*todo.List, error)
 	Lists(ctx context.Context) ([]todo.List, error)
 }
 
@@ -71,6 +78,31 @@ func (l *ListsAPI) Items(w http.ResponseWriter, r *http.Request) {
 		}
 
 		return &Response{Body: &ItemsBody{Items: items}}, nil
+	}
+
+	handleRequest(h)(w, r)
+}
+
+// List which contains TODO items.
+func (l *ListsAPI) List(w http.ResponseWriter, r *http.Request) {
+	h := func(w http.ResponseWriter, r *http.Request) (*Response, *ErrorResponse) {
+		params := httprouter.ParamsFromContext(r.Context())
+
+		listID := strings.TrimSpace(params.ByName("list_id"))
+		if listID == "" {
+			return nil, &ErrorResponse{Status: http.StatusBadRequest, Error: `"list_id" path param must not be blank`}
+		}
+
+		list, err := l.repo.List(r.Context(), listID)
+		if nfe := (todo.NotFoundError)(""); errors.As(err, &nfe) {
+			return nil, &ErrorResponse{Status: http.StatusNotFound, Error: nfe.Error()}
+		}
+
+		if err != nil {
+			return nil, &ErrorResponse{Status: http.StatusInternalServerError, Error: "Internal Server Error", Cause: err}
+		}
+
+		return &Response{Body: &ListBody{List: list}}, nil
 	}
 
 	handleRequest(h)(w, r)

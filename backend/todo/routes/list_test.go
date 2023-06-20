@@ -122,6 +122,103 @@ func TestListsAPI_Items(t *testing.T) {
 	}
 }
 
+func TestListsAPI_List(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		ListID string
+	}
+
+	type fields struct {
+		MockExpectations func(ctx context.Context, l *listRepo)
+	}
+
+	type want struct {
+		Body    string
+		Code    int
+		Headers http.Header
+	}
+
+	testTable := map[string]struct {
+		Args   args
+		Fields fields
+		Want   want
+	}{
+		"Empty List ID Path Param": {
+			Args:   args{ListID: "%20"},
+			Fields: fields{MockExpectations: func(context.Context, *listRepo) {}},
+			Want:   want{Body: `{"error": "\"list_id\" path param must not be blank"}`, Code: http.StatusBadRequest},
+		},
+		"Query failure": {
+			Args: args{ListID: "1"},
+			Fields: fields{
+				MockExpectations: func(ctx context.Context, l *listRepo) {
+					l.OnList(ctx, "1").Return(nil, errors.New("query failure"))
+				},
+			},
+			Want: want{Body: `{"error": "Internal Server Error"}`, Code: http.StatusInternalServerError},
+		},
+		"Not Found": {
+			Args: args{ListID: "2"},
+			Fields: fields{
+				MockExpectations: func(ctx context.Context, l *listRepo) {
+					l.OnList(ctx, "2").Return(nil, todo.NotFoundError("list not found"))
+				},
+			},
+			Want: want{Body: `{"error": "list not found"}`, Code: http.StatusNotFound},
+		},
+		"Exists": {
+			Args: args{ListID: "1"},
+			Fields: fields{
+				MockExpectations: func(ctx context.Context, l *listRepo) {
+					l.OnList(ctx, "1").Return(&todo.List{ID: "1", Description: "Golang-Syd Meetup June 2023"}, nil)
+				},
+			},
+			Want: want{
+				Body: `{
+					"list": {"id": "1", "description": "Golang-Syd Meetup June 2023"}
+				}`,
+				Code: http.StatusOK,
+			},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			defer failOnPanic(t)
+
+			testLogger := NewTestLogger(t)
+			ctx := withTestContext(context.Background(), t)
+
+			var repo listRepo
+			listsAPI := routes.NewListAPI(&repo)
+
+			tt.Fields.MockExpectations(ctx, &repo)
+			defer mock.AssertExpectationsForObjects(t, &repo)
+
+			h := routes.Handler(listsAPI, testLogger)
+
+			route := fmt.Sprintf("/api/v1/lists/%s", tt.Args.ListID)
+			req := httptest.NewRequest(http.MethodGet, route, http.NoBody).WithContext(ctx)
+			rec := httptest.NewRecorder()
+
+			h.ServeHTTP(rec, req)
+
+			res := rec.Result()
+
+			assert.Equal(t, tt.Want.Code, res.StatusCode, "HTTP Status Code")
+
+			body, err := io.ReadAll(res.Body)
+			assert.NoError(t, err, "Body Read Error")
+			assert.JSONEq(t, tt.Want.Body, string(body), "HTTP Response Body")
+		})
+	}
+}
+
 func TestListsAPI_Lists(t *testing.T) {
 	t.Parallel()
 
@@ -225,6 +322,17 @@ func (l *listRepo) Items(ctx context.Context, listID string) ([]todo.Item, error
 func (l *listRepo) OnItems(ctx context.Context, listID string) *call2[[]todo.Item, error] {
 	m := l.On("Items", testContext(ctx), listID)
 	return &call2[[]todo.Item, error]{m: m}
+}
+
+func (l *listRepo) List(ctx context.Context, listID string) (*todo.List, error) {
+	args := l.Called(testContext(ctx), listID)
+	return args.Get(0).(*todo.List), args.Error(1)
+}
+
+// OnList provides a type-safe mock setup function, used instead of using 'On("List, ...)'
+func (l *listRepo) OnList(ctx context.Context, listID string) *call2[*todo.List, error] {
+	m := l.On("List", testContext(ctx), listID)
+	return &call2[*todo.List, error]{m: m}
 }
 
 func (l *listRepo) Lists(ctx context.Context) ([]todo.List, error) {

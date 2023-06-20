@@ -101,6 +101,84 @@ func TestItems(t *testing.T) {
 	}
 }
 
+func TestList(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		ListID string
+	}
+
+	type fields struct {
+		MockExpectations func(sqlmock.Sqlmock)
+	}
+
+	type want struct {
+		Error error
+		List  *todo.List
+	}
+
+	queryErr := errors.New("failed to execute query")
+
+	testTable := map[string]struct {
+		Args   args
+		Fields fields
+		Want   want
+	}{
+		"Query failure": {
+			Args: args{ListID: "1"},
+			Fields: fields{
+				MockExpectations: func(mock sqlmock.Sqlmock) {
+					mockListQuery(mock, "1").WillReturnError(queryErr)
+				},
+			},
+			Want: want{Error: queryErr},
+		},
+		"No Result": {
+			Args: args{ListID: "1"},
+			Fields: fields{
+				MockExpectations: func(mock sqlmock.Sqlmock) {
+					mockListQuery(mock, "1").WillReturnRows(mockListRows())
+				},
+			},
+			Want: want{Error: todo.NotFoundError(`list with id "1" does not exist`)},
+		},
+		"Exists": {
+			Args: args{ListID: "2"},
+			Fields: fields{
+				MockExpectations: func(mock sqlmock.Sqlmock) {
+					mockListQuery(mock, "2").WillReturnRows(mockListRows(todo.List{ID: "2", Description: "Golang-Syd Meetup June 2023"}))
+				},
+			},
+			Want: want{List: &todo.List{ID: "2", Description: "Golang-Syd Meetup June 2023"}},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			db, mock := mockDB(t)
+			repo := database.NewListRepository(db)
+
+			tt.Fields.MockExpectations(mock)
+
+			list, err := repo.List(context.Background(), tt.Args.ListID)
+
+			assert.NoError(t, mock.ExpectationsWereMet(), "DB Expectations")
+
+			if tt.Want.Error != nil {
+				assert.ErrorIs(t, err, tt.Want.Error, "Retrieval error")
+				return
+			}
+
+			require.NoError(t, err, "Retrieval error")
+			assert.Equal(t, tt.Want.List, list, "List")
+		})
+	}
+}
+
 func TestLists(t *testing.T) {
 	t.Parallel()
 
@@ -201,6 +279,17 @@ func mockItemRows(items ...todo.Item) *sqlmock.Rows {
 	}
 
 	return rows
+}
+
+func mockListQuery(mock sqlmock.Sqlmock, listID string) *sqlmock.ExpectedQuery {
+	q := `
+		SELECT id,
+		       description
+		  FROM lists
+		 WHERE id = $1
+	`
+
+	return mock.ExpectQuery(q).WithArgs(listID)
 }
 
 func mockListsQuery(mock sqlmock.Sqlmock) *sqlmock.ExpectedQuery {

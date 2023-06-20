@@ -11,6 +11,7 @@ func Handler(lists *ListsAPI, logger *slog.Logger) http.Handler {
 	m := mux{logger: logger, router: httprouter.New()}
 
 	m.handlerFunc(http.MethodGet, "/api/v1/lists", lists.Lists)
+	m.handlerFunc(http.MethodGet, "/api/v1/lists/:list_id", lists.List)
 	m.handlerFunc(http.MethodGet, "/api/v1/lists/:list_id/items", lists.Items)
 	m.handlerFunc(http.MethodGet, "/ping", Ping)
 
