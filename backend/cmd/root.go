@@ -30,7 +30,7 @@ func Root(logger *slog.Logger) *cobra.Command {
 		},
 	}
 
-	root.PersistentFlags().StringVar(&cfg.DBConn, "dburl", "postgres://todo:password@127.0.0.1/todo", "DB connection string")
+	root.PersistentFlags().StringVar(&cfg.DBConn, "dburl", "postgres://todo:password@127.0.0.1/todo?sslmode=disable", "DB connection string")
 	root.PersistentFlags().StringVarP(&cfg.Host, "host", "H", "127.0.0.1", "Host interface address for the server")
 	root.PersistentFlags().IntVarP(&cfg.Port, "port", "P", 8080, "HTTP port which the server listens on")
 

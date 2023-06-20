@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:15-alpine3.17
+    environment:
+      - POSTGRES_DB=todo
+      - POSTGRES_PASSWORD=password
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - ./db/initdb.d/:/docker-entrypoint-initdb.d/
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata: {}

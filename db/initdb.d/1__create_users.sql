@@ -1,0 +1,3 @@
+CREATE USER "todo" WITH PASSWORD 'password';
+
+GRANT ALL PRIVILEGES ON DATABASE "todo" TO "todo";
