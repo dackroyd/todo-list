@@ -37,3 +37,22 @@ func (r *ListRepository) Items(ctx context.Context, listID string) ([]todo.Item,
 
 	return items, nil
 }
+
+func (r *ListRepository) Lists(ctx context.Context) ([]todo.List, error) {
+	query := `
+		SELECT id,
+		       description
+		  FROM lists
+	`
+
+	cols := func(l *todo.List) []any {
+		return []any{&l.ID, &l.Description}
+	}
+
+	lists, err := queryRows(ctx, r.db, cols, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query todo lists: %w", err)
+	}
+
+	return lists, nil
+}

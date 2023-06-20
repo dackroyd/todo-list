@@ -29,9 +29,15 @@ type ItemsBody struct {
 	Items []todo.Item `json:"items"`
 }
 
+// ListsBody included when retrieving TODO lists.
+type ListsBody struct {
+	Lists []todo.List `json:"lists"`
+}
+
 // ListRepository where TODO lists and items are stored.
 type ListRepository interface {
 	Items(ctx context.Context, listID string) ([]todo.Item, error)
+	Lists(ctx context.Context) ([]todo.List, error)
 }
 
 // ListsAPI manages TODO lists.
@@ -65,6 +71,24 @@ func (l *ListsAPI) Items(w http.ResponseWriter, r *http.Request) {
 		}
 
 		return &Response{Body: &ItemsBody{Items: items}}, nil
+	}
+
+	handleRequest(h)(w, r)
+}
+
+func (l *ListsAPI) Lists(w http.ResponseWriter, r *http.Request) {
+	h := func(w http.ResponseWriter, r *http.Request) (*Response, *ErrorResponse) {
+		lists, err := l.repo.Lists(r.Context())
+		if err != nil {
+			return nil, &ErrorResponse{Status: http.StatusInternalServerError, Error: "Internal Server Error", Cause: err}
+		}
+
+		if lists == nil {
+			// Ensure we get an empty array in the response, not `null`
+			lists = []todo.List{}
+		}
+
+		return &Response{Body: &ListsBody{Lists: lists}}, nil
 	}
 
 	handleRequest(h)(w, r)

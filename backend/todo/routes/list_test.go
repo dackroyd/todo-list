@@ -122,6 +122,96 @@ func TestListsAPI_Items(t *testing.T) {
 	}
 }
 
+func TestListsAPI_Lists(t *testing.T) {
+	t.Parallel()
+
+	type fields struct {
+		MockExpectations func(ctx context.Context, l *listRepo)
+	}
+
+	type want struct {
+		Body    string
+		Code    int
+		Headers http.Header
+	}
+
+	testTable := map[string]struct {
+		Fields fields
+		Want   want
+	}{
+		"Query failure": {
+			Fields: fields{
+				MockExpectations: func(ctx context.Context, l *listRepo) {
+					l.OnLists(ctx).Return(nil, errors.New("query failure"))
+				},
+			},
+			Want: want{Body: `{"error": "Internal Server Error"}`, Code: http.StatusInternalServerError},
+		},
+		"No Lists": {
+			Fields: fields{
+				MockExpectations: func(ctx context.Context, l *listRepo) {
+					l.OnLists(ctx).Return(nil, nil)
+				},
+			},
+			Want: want{Body: `{"lists": []}`, Code: http.StatusOK},
+		},
+		"Lists": {
+			Fields: fields{
+				MockExpectations: func(ctx context.Context, l *listRepo) {
+					lists := []todo.List{
+						{ID: "1", Description: "Chores"},
+						{ID: "2", Description: "Golang-Syd Meetup June 2023"},
+					}
+					l.OnLists(ctx).Return(lists, nil)
+				},
+			},
+			Want: want{
+				Body: `{
+					"lists": [
+						{"id": "1", "description": "Chores"},
+						{"id": "2", "description": "Golang-Syd Meetup June 2023"}
+					]
+				}`,
+				Code: http.StatusOK,
+			},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			defer failOnPanic(t)
+
+			testLogger := NewTestLogger(t)
+			ctx := withTestContext(context.Background(), t)
+
+			var repo listRepo
+			listsAPI := routes.NewListAPI(&repo)
+
+			tt.Fields.MockExpectations(ctx, &repo)
+			defer mock.AssertExpectationsForObjects(t, &repo)
+
+			h := routes.Handler(listsAPI, testLogger)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/lists", http.NoBody).WithContext(ctx)
+			rec := httptest.NewRecorder()
+
+			h.ServeHTTP(rec, req)
+
+			res := rec.Result()
+
+			assert.Equal(t, tt.Want.Code, res.StatusCode, "HTTP Status Code")
+
+			body, err := io.ReadAll(res.Body)
+			assert.NoError(t, err, "Body Read Error")
+			assert.JSONEq(t, tt.Want.Body, string(body), "HTTP Response Body")
+		})
+	}
+}
+
 type listRepo struct {
 	mock.Mock
 }
@@ -135,4 +225,15 @@ func (l *listRepo) Items(ctx context.Context, listID string) ([]todo.Item, error
 func (l *listRepo) OnItems(ctx context.Context, listID string) *call2[[]todo.Item, error] {
 	m := l.On("Items", testContext(ctx), listID)
 	return &call2[[]todo.Item, error]{m: m}
+}
+
+func (l *listRepo) Lists(ctx context.Context) ([]todo.List, error) {
+	args := l.Called(testContext(ctx))
+	return args.Get(0).([]todo.List), args.Error(1)
+}
+
+// OnLists provides a type-safe mock setup function, used instead of using 'On("Lists, ...)'
+func (l *listRepo) OnLists(ctx context.Context) *call2[[]todo.List, error] {
+	m := l.On("Lists", testContext(ctx))
+	return &call2[[]todo.List, error]{m: m}
 }

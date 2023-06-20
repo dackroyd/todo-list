@@ -101,6 +101,85 @@ func TestItems(t *testing.T) {
 	}
 }
 
+func TestLists(t *testing.T) {
+	t.Parallel()
+
+	type fields struct {
+		MockExpectations func(sqlmock.Sqlmock)
+	}
+
+	type want struct {
+		Error error
+		Lists []todo.List
+	}
+
+	queryErr := errors.New("failed to execute query")
+
+	testTable := map[string]struct {
+		Fields fields
+		Want   want
+	}{
+		"Query failure": {
+			Fields: fields{
+				MockExpectations: func(mock sqlmock.Sqlmock) {
+					mockListsQuery(mock).WillReturnError(queryErr)
+				},
+			},
+			Want: want{Error: queryErr},
+		},
+		"No Lists": {
+			Fields: fields{
+				MockExpectations: func(mock sqlmock.Sqlmock) {
+					mockListsQuery(mock).WillReturnRows(mockListRows())
+				},
+			},
+		},
+		"Non-empty": {
+			Fields: fields{
+				MockExpectations: func(mock sqlmock.Sqlmock) {
+					mockListsQuery(mock).WillReturnRows(mockListRows(
+						todo.List{ID: "1", Description: "Chores"},
+						todo.List{ID: "2", Description: "Golang-Syd June 2023"},
+						todo.List{ID: "3", Description: "Holiday"},
+					))
+				},
+			},
+			Want: want{
+				Lists: []todo.List{
+					{ID: "1", Description: "Chores"},
+					{ID: "2", Description: "Golang-Syd June 2023"},
+					{ID: "3", Description: "Holiday"},
+				},
+			},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			db, mock := mockDB(t)
+			repo := database.NewListRepository(db)
+
+			tt.Fields.MockExpectations(mock)
+
+			lists, err := repo.Lists(context.Background())
+
+			assert.NoError(t, mock.ExpectationsWereMet(), "DB Expectations")
+
+			if tt.Want.Error != nil {
+				assert.ErrorIs(t, err, tt.Want.Error, "Retrieval error")
+				return
+			}
+
+			require.NoError(t, err, "Retrieval error")
+			assert.Equal(t, tt.Want.Lists, lists, "Lists")
+		})
+	}
+}
+
 func mockItemsQuery(mock sqlmock.Sqlmock, listID string) *sqlmock.ExpectedQuery {
 	q := `
 		SELECT id,
@@ -119,6 +198,26 @@ func mockItemRows(items ...todo.Item) *sqlmock.Rows {
 
 	for _, item := range items {
 		rows.AddRow(item.ID, item.Description, item.Due, item.Completed)
+	}
+
+	return rows
+}
+
+func mockListsQuery(mock sqlmock.Sqlmock) *sqlmock.ExpectedQuery {
+	q := `
+		SELECT id,
+		       description
+		  FROM lists
+	`
+
+	return mock.ExpectQuery(q)
+}
+
+func mockListRows(lists ...todo.List) *sqlmock.Rows {
+	rows := sqlmock.NewRows([]string{"id", "description"})
+
+	for _, list := range lists {
+		rows.AddRow(list.ID, list.Description)
 	}
 
 	return rows
