@@ -10,12 +10,13 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/dackroyd/todo-list/backend/todo/database"
-	"github.com/dackroyd/todo-list/backend/todo/routes"
 	"github.com/lib/pq"
 	"github.com/spf13/cobra"
 	"golang.org/x/exp/slog"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dackroyd/todo-list/backend/todo/database"
+	"github.com/dackroyd/todo-list/backend/todo/routes"
 )
 
 func Root(logger *slog.Logger) *cobra.Command {
