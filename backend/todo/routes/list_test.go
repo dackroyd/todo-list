@@ -171,12 +171,41 @@ func TestListsAPI_List(t *testing.T) {
 			Args: args{ListID: "1"},
 			Fields: fields{
 				MockExpectations: func(ctx context.Context, l *listRepo) {
-					l.OnList(ctx, "1").Return(&todo.List{ID: "1", Description: "Golang-Syd Meetup June 2023"}, nil)
+					list := &todo.DueList{List: todo.List{ID: "1", Description: "Golang-Syd Meetup June 2023"}}
+					l.OnList(ctx, "1").Return(list, nil)
 				},
 			},
 			Want: want{
 				Body: `{
-					"list": {"id": "1", "description": "Golang-Syd Meetup June 2023"}
+					"list": {"id": "1", "description": "Golang-Syd Meetup June 2023"},
+					"dueItems": null
+				}`,
+				Code: http.StatusOK,
+			},
+		},
+		"Has Due Items": {
+			Args: args{ListID: "1"},
+			Fields: fields{
+				MockExpectations: func(ctx context.Context, l *listRepo) {
+					list := &todo.DueList{
+						List: todo.List{ID: "1", Description: "Golang-Syd Meetup June 2023"},
+						DueItems: []todo.Item{
+							{ID: "1", Description: "Washing", Due: ptr(time.Date(2023, time.June, 20, 8, 0, 0, 0, time.UTC))},
+							{ID: "2", Description: "Mop Floors", Due: ptr(time.Date(2023, time.June, 21, 10, 0, 0, 0, time.UTC))},
+							{ID: "3", Description: "Groceries", Due: ptr(time.Date(2023, time.June, 22, 2, 0, 0, 0, time.UTC))},
+						},
+					}
+					l.OnList(ctx, "1").Return(list, nil)
+				},
+			},
+			Want: want{
+				Body: `{
+					"list": {"id": "1", "description": "Golang-Syd Meetup June 2023"},
+					"dueItems": [
+						{"id": "1", "description": "Washing", "due": "2023-06-20T08:00:00Z", "completed": null},
+						{"id": "2", "description": "Mop Floors", "due": "2023-06-21T10:00:00Z", "completed": null},
+						{"id": "3", "description": "Groceries", "due": "2023-06-22T02:00:00Z", "completed": null}
+					]
 				}`,
 				Code: http.StatusOK,
 			},
@@ -255,9 +284,23 @@ func TestListsAPI_Lists(t *testing.T) {
 		"Lists": {
 			Fields: fields{
 				MockExpectations: func(ctx context.Context, l *listRepo) {
-					lists := []todo.List{
-						{ID: "1", Description: "Chores"},
-						{ID: "2", Description: "Golang-Syd Meetup June 2023"},
+					lists := []todo.DueList{
+						{
+							List: todo.List{ID: "1", Description: "Chores"},
+							DueItems: []todo.Item{
+								{ID: "1", Description: "Washing", Due: ptr(time.Date(2023, time.June, 20, 8, 0, 0, 0, time.UTC))},
+								{ID: "2", Description: "Mop Floors", Due: ptr(time.Date(2023, time.June, 21, 10, 0, 0, 0, time.UTC))},
+								{ID: "3", Description: "Groceries", Due: ptr(time.Date(2023, time.June, 22, 2, 0, 0, 0, time.UTC))},
+							},
+						},
+						{
+							List: todo.List{ID: "2", Description: "Golang-Syd Meetup June 2023"},
+							DueItems: []todo.Item{
+								{ID: "4", Description: "Prepare Presentation", Due: ptr(time.Date(2023, time.June, 20, 8, 0, 0, 0, time.UTC))},
+								{ID: "5", Description: "Practice", Due: ptr(time.Date(2023, time.June, 26, 0, 0, 0, 0, time.UTC))},
+								{ID: "6", Description: "Attend & Present", Due: ptr(time.Date(2023, time.June, 29, 8, 0, 0, 0, time.UTC))},
+							},
+						},
 					}
 					l.OnLists(ctx).Return(lists, nil)
 				},
@@ -265,8 +308,22 @@ func TestListsAPI_Lists(t *testing.T) {
 			Want: want{
 				Body: `{
 					"lists": [
-						{"id": "1", "description": "Chores"},
-						{"id": "2", "description": "Golang-Syd Meetup June 2023"}
+						{
+							"list": {"id": "1", "description": "Chores"},
+							"dueItems": [
+								{"id": "1", "description": "Washing", "due": "2023-06-20T08:00:00Z", "completed": null},
+								{"id": "2", "description": "Mop Floors", "due": "2023-06-21T10:00:00Z", "completed": null},
+								{"id": "3", "description": "Groceries", "due": "2023-06-22T02:00:00Z", "completed": null}
+							]
+						},
+						{
+							"list": {"id": "2", "description": "Golang-Syd Meetup June 2023"},
+							"dueItems": [
+								{"id": "4", "description": "Prepare Presentation", "due": "2023-06-20T08:00:00Z", "completed": null},
+								{"id": "5", "description": "Practice", "due": "2023-06-26T00:00:00Z", "completed": null},
+								{"id": "6", "description": "Attend & Present", "due": "2023-06-29T08:00:00Z", "completed": null}
+							]
+						}
 					]
 				}`,
 				Code: http.StatusOK,
@@ -324,24 +381,28 @@ func (l *listRepo) OnItems(ctx context.Context, listID string) *call2[[]todo.Ite
 	return &call2[[]todo.Item, error]{m: m}
 }
 
-func (l *listRepo) List(ctx context.Context, listID string) (*todo.List, error) {
+func (l *listRepo) List(ctx context.Context, listID string) (*todo.DueList, error) {
 	args := l.Called(testContext(ctx), listID)
-	return args.Get(0).(*todo.List), args.Error(1)
+	return args.Get(0).(*todo.DueList), args.Error(1)
 }
 
 // OnList provides a type-safe mock setup function, used instead of using 'On("List, ...)'
-func (l *listRepo) OnList(ctx context.Context, listID string) *call2[*todo.List, error] {
+func (l *listRepo) OnList(ctx context.Context, listID string) *call2[*todo.DueList, error] {
 	m := l.On("List", testContext(ctx), listID)
-	return &call2[*todo.List, error]{m: m}
+	return &call2[*todo.DueList, error]{m: m}
 }
 
-func (l *listRepo) Lists(ctx context.Context) ([]todo.List, error) {
+func (l *listRepo) Lists(ctx context.Context) ([]todo.DueList, error) {
 	args := l.Called(testContext(ctx))
-	return args.Get(0).([]todo.List), args.Error(1)
+	return args.Get(0).([]todo.DueList), args.Error(1)
 }
 
 // OnLists provides a type-safe mock setup function, used instead of using 'On("Lists, ...)'
-func (l *listRepo) OnLists(ctx context.Context) *call2[[]todo.List, error] {
+func (l *listRepo) OnLists(ctx context.Context) *call2[[]todo.DueList, error] {
 	m := l.On("Lists", testContext(ctx))
-	return &call2[[]todo.List, error]{m: m}
+	return &call2[[]todo.DueList, error]{m: m}
+}
+
+func ptr[T any](t T) *T {
+	return &t
 }

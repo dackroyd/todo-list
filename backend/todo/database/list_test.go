@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -114,7 +115,7 @@ func TestList(t *testing.T) {
 
 	type want struct {
 		Error error
-		List  *todo.List
+		List  *todo.DueList
 	}
 
 	queryErr := errors.New("failed to execute query")
@@ -142,14 +143,38 @@ func TestList(t *testing.T) {
 			},
 			Want: want{Error: todo.NotFoundError(`list with id "1" does not exist`)},
 		},
-		"Exists": {
+		"Exists - No Items Due": {
 			Args: args{ListID: "2"},
 			Fields: fields{
 				MockExpectations: func(mock sqlmock.Sqlmock) {
 					mockListQuery(mock, "2").WillReturnRows(mockListRows(todo.List{ID: "2", Description: "Golang-Syd Meetup June 2023"}))
+					mockItemsQueryDue(mock, "2").WillReturnRows(mockItemRows())
 				},
 			},
-			Want: want{List: &todo.List{ID: "2", Description: "Golang-Syd Meetup June 2023"}},
+			Want: want{List: &todo.DueList{List: todo.List{ID: "2", Description: "Golang-Syd Meetup June 2023"}}},
+		},
+		"Exists - With Due Items": {
+			Args: args{ListID: "2"},
+			Fields: fields{
+				MockExpectations: func(mock sqlmock.Sqlmock) {
+					mockListQuery(mock, "2").WillReturnRows(mockListRows(todo.List{ID: "2", Description: "Golang-Syd Meetup June 2023"}))
+					mockItemsQueryDue(mock, "2").WillReturnRows(mockItemRows(
+						todo.Item{ID: "1", Description: "Prepare Presentation", Due: ptr(time.Date(2023, time.June, 20, 8, 0, 0, 0, time.UTC))},
+						todo.Item{ID: "2", Description: "Practice", Due: ptr(time.Date(2023, time.June, 26, 0, 0, 0, 0, time.UTC))},
+						todo.Item{ID: "3", Description: "Attend & Present", Due: ptr(time.Date(2023, time.June, 29, 8, 0, 0, 0, time.UTC))},
+					))
+				},
+			},
+			Want: want{
+				List: &todo.DueList{
+					List: todo.List{ID: "2", Description: "Golang-Syd Meetup June 2023"},
+					DueItems: []todo.Item{
+						{ID: "1", Description: "Prepare Presentation", Due: ptr(time.Date(2023, time.June, 20, 8, 0, 0, 0, time.UTC))},
+						{ID: "2", Description: "Practice", Due: ptr(time.Date(2023, time.June, 26, 0, 0, 0, 0, time.UTC))},
+						{ID: "3", Description: "Attend & Present", Due: ptr(time.Date(2023, time.June, 29, 8, 0, 0, 0, time.UTC))},
+					},
+				},
+			},
 		},
 	}
 
@@ -188,7 +213,7 @@ func TestLists(t *testing.T) {
 
 	type want struct {
 		Error error
-		Lists []todo.List
+		Lists []todo.DueList
 	}
 
 	queryErr := errors.New("failed to execute query")
@@ -212,7 +237,7 @@ func TestLists(t *testing.T) {
 				},
 			},
 		},
-		"Non-empty": {
+		"Non-empty with no due items": {
 			Fields: fields{
 				MockExpectations: func(mock sqlmock.Sqlmock) {
 					mockListsQuery(mock).WillReturnRows(mockListRows(
@@ -220,13 +245,59 @@ func TestLists(t *testing.T) {
 						todo.List{ID: "2", Description: "Golang-Syd June 2023"},
 						todo.List{ID: "3", Description: "Holiday"},
 					))
+					mockItemsQueryDue(mock, "1").WillReturnRows(mockItemRows())
+					mockItemsQueryDue(mock, "2").WillReturnRows(mockItemRows())
+					mockItemsQueryDue(mock, "3").WillReturnRows(mockItemRows())
 				},
 			},
 			Want: want{
-				Lists: []todo.List{
-					{ID: "1", Description: "Chores"},
-					{ID: "2", Description: "Golang-Syd June 2023"},
-					{ID: "3", Description: "Holiday"},
+				Lists: []todo.DueList{
+					{List: todo.List{ID: "1", Description: "Chores"}},
+					{List: todo.List{ID: "2", Description: "Golang-Syd June 2023"}},
+					{List: todo.List{ID: "3", Description: "Holiday"}},
+				},
+			},
+		},
+		"Lists with due items": {
+			Fields: fields{
+				MockExpectations: func(mock sqlmock.Sqlmock) {
+					mockListsQuery(mock).WillReturnRows(mockListRows(
+						todo.List{ID: "1", Description: "Chores"},
+						todo.List{ID: "2", Description: "Golang-Syd June 2023"},
+						todo.List{ID: "3", Description: "Holiday"},
+					))
+					mockItemsQueryDue(mock, "1").WillReturnRows(mockItemRows(
+						todo.Item{ID: "1", Description: "Washing", Due: ptr(time.Date(2023, time.June, 20, 8, 0, 0, 0, time.UTC))},
+						todo.Item{ID: "2", Description: "Mop Floors", Due: ptr(time.Date(2023, time.June, 21, 10, 0, 0, 0, time.UTC))},
+						todo.Item{ID: "3", Description: "Groceries", Due: ptr(time.Date(2023, time.June, 22, 2, 0, 0, 0, time.UTC))},
+					))
+					mockItemsQueryDue(mock, "2").WillReturnRows(mockItemRows(
+						todo.Item{ID: "4", Description: "Prepare Presentation", Due: ptr(time.Date(2023, time.June, 20, 8, 0, 0, 0, time.UTC))},
+						todo.Item{ID: "5", Description: "Practice", Due: ptr(time.Date(2023, time.June, 26, 0, 0, 0, 0, time.UTC))},
+						todo.Item{ID: "6", Description: "Attend & Present", Due: ptr(time.Date(2023, time.June, 29, 8, 0, 0, 0, time.UTC))},
+					))
+					mockItemsQueryDue(mock, "3").WillReturnRows(mockItemRows())
+				},
+			},
+			Want: want{
+				Lists: []todo.DueList{
+					{
+						List: todo.List{ID: "1", Description: "Chores"},
+						DueItems: []todo.Item{
+							{ID: "1", Description: "Washing", Due: ptr(time.Date(2023, time.June, 20, 8, 0, 0, 0, time.UTC))},
+							{ID: "2", Description: "Mop Floors", Due: ptr(time.Date(2023, time.June, 21, 10, 0, 0, 0, time.UTC))},
+							{ID: "3", Description: "Groceries", Due: ptr(time.Date(2023, time.June, 22, 2, 0, 0, 0, time.UTC))},
+						},
+					},
+					{
+						List: todo.List{ID: "2", Description: "Golang-Syd June 2023"},
+						DueItems: []todo.Item{
+							{ID: "4", Description: "Prepare Presentation", Due: ptr(time.Date(2023, time.June, 20, 8, 0, 0, 0, time.UTC))},
+							{ID: "5", Description: "Practice", Due: ptr(time.Date(2023, time.June, 26, 0, 0, 0, 0, time.UTC))},
+							{ID: "6", Description: "Attend & Present", Due: ptr(time.Date(2023, time.June, 29, 8, 0, 0, 0, time.UTC))},
+						},
+					},
+					{List: todo.List{ID: "3", Description: "Holiday"}},
 				},
 			},
 		},
@@ -266,6 +337,22 @@ func mockItemsQuery(mock sqlmock.Sqlmock, listID string) *sqlmock.ExpectedQuery 
 		       completed
 		  FROM items
 		 WHERE list_id = $1
+	`
+
+	return mock.ExpectQuery(q).WithArgs(listID)
+}
+
+func mockItemsQueryDue(mock sqlmock.Sqlmock, listID string) *sqlmock.ExpectedQuery {
+	q := `
+		SELECT id,
+		       description,
+		       due,
+		       completed
+		  FROM items
+		 WHERE list_id = $1
+		   AND due <= now() + INTERVAL '1 day'
+		   AND completed IS NULL
+		 ORDER BY due
 	`
 
 	return mock.ExpectQuery(q).WithArgs(listID)
@@ -322,4 +409,8 @@ func mockDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
 	})
 
 	return db, mock
+}
+
+func ptr[T any](t T) *T {
+	return &t
 }

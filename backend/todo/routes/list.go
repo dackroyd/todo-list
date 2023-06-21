@@ -32,19 +32,20 @@ type ItemsBody struct {
 
 // ListBody included when retrieving a TODO list.
 type ListBody struct {
-	List *todo.List `json:"list"`
+	List     *todo.List  `json:"list"`
+	DueItems []todo.Item `json:"dueItems"`
 }
 
 // ListsBody included when retrieving TODO lists.
 type ListsBody struct {
-	Lists []todo.List `json:"lists"`
+	Lists []todo.DueList `json:"lists"`
 }
 
 // ListRepository where TODO lists and items are stored.
 type ListRepository interface {
 	Items(ctx context.Context, listID string) ([]todo.Item, error)
-	List(ctx context.Context, listID string) (*todo.List, error)
-	Lists(ctx context.Context) ([]todo.List, error)
+	List(ctx context.Context, listID string) (*todo.DueList, error)
+	Lists(ctx context.Context) ([]todo.DueList, error)
 }
 
 // ListsAPI manages TODO lists.
@@ -102,7 +103,7 @@ func (l *ListsAPI) List(w http.ResponseWriter, r *http.Request) {
 			return nil, &ErrorResponse{Status: http.StatusInternalServerError, Error: "Internal Server Error", Cause: err}
 		}
 
-		return &Response{Body: &ListBody{List: list}}, nil
+		return &Response{Body: &ListBody{List: &list.List, DueItems: list.DueItems}}, nil
 	}
 
 	handleRequest(h)(w, r)
@@ -117,7 +118,7 @@ func (l *ListsAPI) Lists(w http.ResponseWriter, r *http.Request) {
 
 		if lists == nil {
 			// Ensure we get an empty array in the response, not `null`
-			lists = []todo.List{}
+			lists = []todo.DueList{}
 		}
 
 		return &Response{Body: &ListsBody{Lists: lists}}, nil
