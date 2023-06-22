@@ -39,7 +39,7 @@ func requestLog(h http.Handler, logger *slog.Logger, route string) http.Handler 
 
 		sc := cw.StatusCode()
 		// TODO: more HTTP attributes...
-		log := logger.With(slog.String("http.path", r.URL.Path), slog.String("http.route", route), slog.Int("http.status", sc), slog.Duration("http.request_duration", dur))
+		log := logger.With(slog.String("http.path", r.URL.Path), slog.String("http.route", route), slog.Int("http.status", sc), slog.String("http.request_duration", dur.String()))
 
 		lvl := codeToLevel(sc)
 
