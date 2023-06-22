@@ -10,5 +10,12 @@ services:
       - ./db/initdb.d/:/docker-entrypoint-initdb.d/
       - pgdata:/var/lib/postgresql/data
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.46
+    ports:
+      - 127.0.0.1:4318:4318
+      - 127.0.0.1:14268:14268
+      - 127.0.0.1:16686:16686
+
 volumes:
   pgdata: {}
