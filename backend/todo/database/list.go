@@ -19,6 +19,7 @@ func NewListRepository(db *sql.DB) *ListRepository {
 
 func (r *ListRepository) Items(ctx context.Context, listID string) ([]todo.Item, error) {
 	query := `
+		-- Name: TODO List Items
 		SELECT id,
 		       description,
 		       due,
@@ -41,6 +42,7 @@ func (r *ListRepository) Items(ctx context.Context, listID string) ([]todo.Item,
 
 func (r *ListRepository) List(ctx context.Context, listID string) (*todo.DueList, error) {
 	query := `
+		-- Name: TODO List
 		SELECT id,
 		       description
 		  FROM lists
@@ -70,6 +72,7 @@ func (r *ListRepository) List(ctx context.Context, listID string) (*todo.DueList
 
 func (r *ListRepository) Lists(ctx context.Context) ([]todo.DueList, error) {
 	query := `
+		-- Name: TODO Lists
 		SELECT id,
 		       description
 		  FROM lists
@@ -103,6 +106,7 @@ func (r *ListRepository) Lists(ctx context.Context) ([]todo.DueList, error) {
 
 func (r *ListRepository) dueItems(ctx context.Context, listID string) ([]todo.Item, error) {
 	query := `
+		-- Name: TODO Due List Items
 		SELECT id,
 		       description,
 		       due,

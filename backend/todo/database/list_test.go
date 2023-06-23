@@ -331,6 +331,7 @@ func TestLists(t *testing.T) {
 
 func mockItemsQuery(mock sqlmock.Sqlmock, listID string) *sqlmock.ExpectedQuery {
 	q := `
+		-- Name: TODO List Items
 		SELECT id,
 		       description,
 		       due,
@@ -344,6 +345,7 @@ func mockItemsQuery(mock sqlmock.Sqlmock, listID string) *sqlmock.ExpectedQuery 
 
 func mockItemsQueryDue(mock sqlmock.Sqlmock, listID string) *sqlmock.ExpectedQuery {
 	q := `
+		-- Name: TODO Due List Items
 		SELECT id,
 		       description,
 		       due,
@@ -370,6 +372,7 @@ func mockItemRows(items ...todo.Item) *sqlmock.Rows {
 
 func mockListQuery(mock sqlmock.Sqlmock, listID string) *sqlmock.ExpectedQuery {
 	q := `
+		-- Name: TODO List
 		SELECT id,
 		       description
 		  FROM lists
@@ -381,6 +384,7 @@ func mockListQuery(mock sqlmock.Sqlmock, listID string) *sqlmock.ExpectedQuery {
 
 func mockListsQuery(mock sqlmock.Sqlmock) *sqlmock.ExpectedQuery {
 	q := `
+		-- Name: TODO Lists
 		SELECT id,
 		       description
 		  FROM lists
