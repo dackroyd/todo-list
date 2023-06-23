@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/exp/slog"
 )
 
@@ -25,10 +26,15 @@ type mux struct {
 
 func (m *mux) handler(method, route string, h http.Handler) {
 	w := requestLog(h, m.logger, route)
+	// Instrument HTTP Handlers: Uncomment the line below
+	//w = otelhttp.NewHandler(w, method+" "+route)
 
 	m.router.Handler(method, route, w)
 }
 
 func (m *mux) handlerFunc(method, route string, h http.HandlerFunc) {
-	m.handler(method, route, http.HandlerFunc(h))
+	m.handler(method, route, h)
 }
+
+// HACK: forcing the import to be kept, so that enabling instrumentation only requires uncommenting in 'handler'
+var _ = otelhttp.NewHandler
