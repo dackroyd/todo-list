@@ -17,5 +17,12 @@ services:
       - 127.0.0.1:14268:14268
       - 127.0.0.1:16686:16686
 
+  simulate-ui:
+    build: frontend
+    profiles:
+      - simulate-traffic
+    environment:
+      - DEBUG
+
 volumes:
   pgdata: {}
