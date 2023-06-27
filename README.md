@@ -7,6 +7,7 @@ TODO list app for Golang Syd June 2023 Interactive Session
 Before the Session:
 
 * [Docker](https://www.docker.com/products/docker-desktop/) is installed and running
+* Golang v1.20 SDK is installed and working
 
 This project has been developed on macOS; while it is expected to work elsewhere, it has not been tested.
 
