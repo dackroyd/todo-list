@@ -12,20 +12,23 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/XSAM/otelsql"
 	"github.com/lib/pq"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/semconv/v1.17.0/netconv"
 	"golang.org/x/exp/slog"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 
 	"github.com/dackroyd/todo-list/backend/todo/database"
 	"github.com/dackroyd/todo-list/backend/todo/routes"
@@ -46,14 +49,16 @@ func Root(logger *slog.Logger) *cobra.Command {
 	root.PersistentFlags().StringVar(&cfg.DBConn, "dburl", "postgres://todo:password@127.0.0.1/todo?sslmode=disable", "DB connection string")
 	root.PersistentFlags().StringVarP(&cfg.Host, "host", "H", "127.0.0.1", "Host interface address for the server")
 	root.PersistentFlags().IntVarP(&cfg.Port, "port", "P", 8080, "HTTP port which the server listens on")
+	root.PersistentFlags().StringVar(&cfg.OtelCollector, "otel-collector", "localhost:4317", "open telemetry grpc collector")
 
 	return root
 }
 
 type Config struct {
-	DBConn string
-	Host   string
-	Port   int
+	DBConn        string
+	Host          string
+	Port          int
+	OtelCollector string
 }
 
 func Run(ctx context.Context, cfg *Config, logger *slog.Logger, stdout, stderr io.Writer) error {
@@ -65,12 +70,12 @@ func Run(ctx context.Context, cfg *Config, logger *slog.Logger, stdout, stderr i
 	}
 
 	// Setup Tracing: Uncomment this block
-	//shutdown, err := setupTracing(ctx, logger)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//defer shutdown()
+	shutdown, err := setupTracing(ctx, cfg.OtelCollector, logger)
+	if err != nil {
+		return err
+	}
+
+	defer shutdown()
 
 	db, err := openDB(cfg.DBConn)
 	if err != nil {
@@ -87,7 +92,7 @@ func Run(ctx context.Context, cfg *Config, logger *slog.Logger, stdout, stderr i
 	return runServer(ctx, s, lis)
 }
 
-func setupTracing(ctx context.Context, logger *slog.Logger) (shutdown func(), err error) {
+func setupTracing(ctx context.Context, otelEndpoint string, logger *slog.Logger) (shutdown func(), err error) {
 	r, err := resource.New(ctx,
 		resource.WithSchemaURL(semconv.SchemaURL),
 		resource.WithFromEnv(),
@@ -105,14 +110,24 @@ func setupTracing(ctx context.Context, logger *slog.Logger) (shutdown func(), er
 		return nil, fmt.Errorf("creating OTLP trace exporter: %w", err)
 	}
 
-	exp, err := jaeger.New(jaeger.WithCollectorEndpoint())
+	traceClient := otlptracegrpc.NewClient(
+		otlptracegrpc.WithInsecure(),
+		otlptracegrpc.WithEndpoint(otelEndpoint),
+		otlptracegrpc.WithDialOption(grpc.WithBlock()),
+		otlptracegrpc.WithDialOption(grpc.WithTimeout(10*time.Second)),
+		otlptracegrpc.WithReconnectionPeriod(5*time.Second),
+	)
+	traceExporter, err := otlptrace.New(ctx, traceClient)
 	if err != nil {
-		return nil, fmt.Errorf("creating Jaeger trace exporter: %w", err)
+		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
 	}
 
-	tp := trace.NewTracerProvider(
-		trace.WithBatcher(exp),
-		trace.WithResource(r),
+	bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithResource(r),
+		sdktrace.WithSpanProcessor(bsp),
 	)
 
 	shutdown = func() {
@@ -133,9 +148,9 @@ func openDB(connURL string) (*sql.DB, error) {
 		return nil, fmt.Errorf("unable to parse DB connection string: %w", err)
 	}
 
-	return sql.OpenDB(conn), nil
+	//return sql.OpenDB(conn), nil
 	// Instrument Database Calls: Replace the line above with the one below
-	//return traceDB(connURL, conn)
+	return traceDB(connURL, conn)
 }
 
 func traceDB(connURL string, conn driver.Connector) (*sql.DB, error) {
