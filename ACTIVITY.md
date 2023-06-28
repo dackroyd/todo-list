@@ -180,7 +180,7 @@ Now that we've confirmed everything is working, we can add in tracing
    >
    > Don't see `todo-list-api` in the list of Services? Trace data may not have been sent - check app logs
 
-6. [ ] 📊 Select and review the traces for some of the results
+6. [ ] 📊 Select and review the traces for the "User Homepage" and "TODO List" UI requests
 
    > 🧙 **Tip**
    >
