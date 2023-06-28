@@ -34,6 +34,28 @@ services:
     ports:
       - "3000:3000"
 
+  api:
+    build: backend
+    profiles:
+      - backend
+    command:
+      - --dburl=postgres://todo:password@db/todo?sslmode=disable
+      - --host=0.0.0.0
+    environment:
+      - OTEL_EXPORTER_JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - USER=backend
+    ports:
+      - 127.0.0.1:8080:8080
+
+  simulate-ui:
+    build: frontend
+    profiles:
+      - simulate-traffic
+    environment:
+      - DEBUG
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=grpc
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://tempo:4317/v1/traces
 
 volumes:
   pgdata: {}

@@ -37,6 +37,9 @@ services:
       - simulate-traffic
     environment:
       - DEBUG
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://jaeger:4318/v1/traces
 
 volumes:
   pgdata: {}
