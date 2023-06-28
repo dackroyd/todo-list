@@ -13,9 +13,6 @@ api_endpoint="${api_host}:${api_port}"
 # We're simulating the TODO list UI (imaginary Node.js Frontend)
 export OTEL_SERVICE_NAME="todo-list-ui"
 
-# Locally our Jaeger UI is not using secure transport
-export OTEL_EXPORTER_OTLP_INSECURE=true
-export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://jaeger:4318/v1/traces
 export OTEL_CLI_VERBOSE=true
 
 if ! curl -o /dev/null -v "http://${api_endpoint}/ping"; then
