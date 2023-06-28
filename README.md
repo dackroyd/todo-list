@@ -13,7 +13,7 @@ This project has been developed on macOS; while it is expected to work elsewhere
 
 To make the session as smooth as possible, ideally you also have the project ready to use:
 
-* The repository has been cloned: `git clone git@github.org/dackroyd/todo-list.git`
+* The repository has been cloned: `git clone git@github.org:dackroyd/todo-list.git`
 * Docker images used by `docker-compose.yaml` have been fetched & built. From the root of the repo:
     * `docker compose pull`
     * `docker compose --profile frontend build simulate-ui`
