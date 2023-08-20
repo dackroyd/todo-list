@@ -32,6 +32,8 @@ services:
 
   simulate-ui:
     build: frontend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     profiles:
       - simulate-traffic
     environment:

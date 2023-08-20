@@ -44,7 +44,7 @@ func Root(logger *slog.Logger) *cobra.Command {
 	}
 
 	root.PersistentFlags().StringVar(&cfg.DBConn, "dburl", "postgres://todo:password@127.0.0.1/todo?sslmode=disable", "DB connection string")
-	root.PersistentFlags().StringVarP(&cfg.Host, "host", "H", "127.0.0.1", "Host interface address for the server")
+	root.PersistentFlags().StringVarP(&cfg.Host, "host", "H", "0.0.0.0", "Host interface address for the server")
 	root.PersistentFlags().IntVarP(&cfg.Port, "port", "P", 8080, "HTTP port which the server listens on")
 
 	return root
@@ -57,6 +57,7 @@ type Config struct {
 }
 
 func Run(ctx context.Context, cfg *Config, logger *slog.Logger, stdout, stderr io.Writer) error {
+    fmt.Printf(" the host is "+cfg.Host)
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 
 	lis, err := net.Listen("tcp", addr)
